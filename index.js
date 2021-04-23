@@ -2,51 +2,57 @@
  *
  */
 export default class RefCountedCache {
-  constructor({ create, clean, timeout = 60 * 1000 }) {
+  constructor({ create, clean, defaultTimeout = 60 * 1000 }) {
     this.create = create;
     this.clean = clean;
-    this.timeout = timeout;
+    this.defaultTimeout = defaultTimeout;
     this.cache = {};
   }
 
-  get(key, ...args) {
+  get(key, { args = [], timeout } = {}) {
     let cached = this.cache[key];
 
     // create
     if (!cached) {
       cached = {
-        value: this.create(...args),
-        references: 0,
+        value: this.create(key, args),
+        refs: [],
         cleanTimeout: undefined,
+        timeoutMs: timeout || this.defaultTimeout,
       };
 
       this.cache[key] = cached;
     }
 
-    // always stop cleanup timeout on get
+    // always stop cleanup timeout on get()
     clearTimeout(cached.cleanTimeout);
     delete cached.cleanTimeout;
 
-    // increase count
-    cached.references++;
+    // add ref
+    const ref = new Object();
+    cached.refs.push(ref);
 
-    return cached.value;
+    return {
+      value: cached.value,
+      unref: () => this._unref(key, cached, ref),
+    };
   }
 
-  del(key) {
-    let cached = this.cache[key];
+  // remove ref, setup cleanup timeout if no more refs
+  _unref(key, cached, ref) {
+    let index = cached.refs.indexOf(ref);
 
-    if (cached) {
-      // prevent sub zero
-      if (cached.references > 0) cached.references--;
+    // already removed
+    if (index === -1) return;
 
-      // setup clean timeout
-      if (!cached.cleanTimeout && cached.references <= 0) {
-        cached.cleanTimeout = setTimeout(() => {
-          this.clean(cached.value);
-          delete this.cache[key];
-        }, this.timeout);
-      }
+    cached.refs.splice(index, 1);
+
+    // setup clean timeout
+    if (!cached.cleanTimeout && cached.refs.length === 0) {
+      cached.cleanTimeout = setTimeout(() => {
+        this.clean(cached.value);
+        delete this.cache[key];
+      }, cached.timeoutMs);
     }
   }
 

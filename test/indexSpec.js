@@ -6,97 +6,148 @@ describe('RefCountedCache', function () {
     let i = 0;
 
     const cache = new RefCountedCache({
-      create: () => i++,
-      timeout: 1 * 1000,
+      create: () => {
+        i++;
+        return i;
+      },
+      clean: () => (i = 100),
+      defaultTimeout: 1 * 1000,
     });
 
     // calls create()
-    cache.get('key1', { foo: 'bar' });
+    const get1 = cache.get('key1');
     assert.equal(i, 1);
+    assert.equal(get1.value, 1);
 
     // buffered value, create() not called
-    cache.get('key1', { foo: 'bar' });
+    const get2 = cache.get('key1');
     assert.equal(i, 1);
+    assert.equal(get2.value, 1);
   });
 
-  it('del, unset after timeout', async function () {
+  it('unref(), clean after timeout', async function () {
     let i = 0;
 
     const cache = new RefCountedCache({
-      create: () => i++,
+      create: () => {
+        i++;
+        return i;
+      },
       clean: () => (i = 100),
-      timeout: 200,
+      defaultTimeout: 200,
     });
 
     // calls create()
-    cache.get('key1', { foo: 'bar' });
+    const get1 = cache.get('key1', {
+      args: { foo: 'bar' },
+    });
+
     assert.equal(i, 1);
+    assert.equal(get1.value, 1);
 
     // delete
-    cache.del('key1');
+    get1.unref();
     await new Promise((r) => setTimeout(r, 300));
 
     // internal
     assert(!cache.cache['key1']);
 
     // calls create() again value cleaned up
-    cache.get('key1', { foo: 'bar' });
+    const get2 = cache.get('key1', { timeout: 200, args: { foo: 'bar' } });
     assert.equal(i, 101);
+    assert.equal(get2.value, 101);
 
     // internal
     assert(cache.cache['key1']);
+  });
+
+  it('override timeout', async function () {
+    let i = 0;
+
+    const cache = new RefCountedCache({
+      create: () => {
+        i++;
+        return i;
+      },
+      clean: () => (i = 100),
+      defaultTimeout: 2000,
+    });
+
+    // calls create()
+    const get1 = cache.get('key1', {
+      timeout: 100,
+      args: { foo: 'bar' },
+    });
+
+    assert.equal(i, 1);
+    assert.equal(get1.value, 1);
+
+    // will call clean() with overridden timeout ms
+    get1.unref();
+
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(i, 100);
   });
 
   it('del(), stop cleanup on new get()', async function () {
     let i = 0;
 
     const cache = new RefCountedCache({
-      create: () => i++,
+      create: () => {
+        i++;
+        return i;
+      },
       clean: () => (i = 100),
-      timeout: 200,
+      defaultTimeout: 200,
     });
 
     // calls create()
-    cache.get('key1', { foo: 'bar' });
+    const get1 = cache.get('key1', { timeout: 200, args: { foo: 'bar' } });
     assert.equal(i, 1);
+    assert.equal(get1.value, 1);
 
     // delete
-    cache.del('key1');
+    get1.unref('key1');
+    assert.equal(i, 1);
     await new Promise((r) => setTimeout(r, 100));
 
-    // unset stopped, old value returned
-    cache.get('key1', { foo: 'bar' });
+    // unref/delete stopped, new get
+    cache.get('key1');
     assert.equal(i, 1);
 
     // wait more to verify cleanup really stopped
     await new Promise((r) => setTimeout(r, 300));
-    cache.get('key1', { foo: 'bar' });
+    const get3 = cache.get('key1', { timeout: 200 });
     assert.equal(i, 1);
+    assert.equal(get3.value, 1);
   });
 
-  it('2x get(), will only cleanup after 2x del()', async function () {
+  it('2x get(), will only cleanup after both unref()', async function () {
     let i = 0;
 
     const cache = new RefCountedCache({
-      create: () => i++,
+      create: () => {
+        i++;
+        return i;
+      },
       clean: () => (i = 100),
-      timeout: 200,
+      defaultTimeout: 200,
     });
 
     // calls create() once, but counts references internally
-    cache.get('key1', { foo: 'bar' });
-    cache.get('key1', { foo: 'bar' });
+    const get1 = cache.get('key1');
+    const get2 = cache.get('key1');
     assert.equal(i, 1);
 
-    // delete
-    cache.del('key1');
+    // 1st unref
+    get1.unref();
     await new Promise((r) => setTimeout(r, 300));
 
     // not yet deleted, still 1 ref
     assert.equal(i, 1);
 
-    // delete again
-    cache.del('key1');
+    // 2nd unref
+    get2.unref();
     await new Promise((r) => setTimeout(r, 300));
 
     // no more refs, now deleted
@@ -107,34 +158,30 @@ describe('RefCountedCache', function () {
     let i = 0;
 
     const cache = new RefCountedCache({
-      create: () => i++,
+      create: () => {
+        i++;
+        return i;
+      },
       clean: () => (i = 100),
-      timeout: 200,
+      defaultTimeout: 200,
     });
 
     // calls create() once, but counts references internally
-    cache.get('key1', { foo: 'bar' });
-    cache.get('key1', { foo: 'bar' });
+    const get1 = cache.get('key1');
+    const get2 = cache.get('key1');
     assert.equal(i, 1);
 
-    // delete
-    cache.del('key1');
-    await new Promise((r) => setTimeout(r, 300));
-
-    // not yet deleted, still 1 ref
-    assert.equal(i, 1);
-
-    // delete again, starts cleanup
-    cache.del('key1');
-
-    // stop cleanup
+    // 1st unref
+    get1.unref();
+    get2.unref();
     await new Promise((r) => setTimeout(r, 100));
-    cache.get('key1', { foo: 'bar' });
 
-    // check not cleaned up
+    // new ref
+    const get3 = cache.get('key1');
     await new Promise((r) => setTimeout(r, 300));
 
     // no more refs, now deleted
     assert.equal(i, 1);
+    assert.equal(get3.value, 1);
   });
 });
