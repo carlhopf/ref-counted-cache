@@ -49,10 +49,19 @@ export default class RefCountedCache {
 
     // setup clean timeout
     if (!cached.cleanTimeout && cached.refs.length === 0) {
-      cached.cleanTimeout = setTimeout(() => {
+      const fn = () => {
         this.clean(cached.value);
         delete this.cache[key];
-      }, cached.timeoutMs);
+      };
+
+      // instant
+      if (cached.timeoutMs <= 0) {
+        fn();
+      }
+      // delayed
+      else {
+        cached.cleanTimeout = setTimeout(fn, cached.timeoutMs);
+      }
     }
   }
 
