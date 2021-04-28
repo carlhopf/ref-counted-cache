@@ -38,9 +38,7 @@ describe('RefCountedCache', function () {
     });
 
     // calls create()
-    const get1 = cache.get('key1', {
-      args: { foo: 'bar' },
-    });
+    const get1 = cache.get('key1', {});
 
     assert.equal(i, 1);
     assert.equal(get1.value, 1);
@@ -53,7 +51,7 @@ describe('RefCountedCache', function () {
     assert(!cache.cache['key1']);
 
     // calls create() again value cleaned up
-    const get2 = cache.get('key1', { timeout: 200, args: { foo: 'bar' } });
+    const get2 = cache.get('key1', { timeout: 200 });
     assert.equal(i, 101);
     assert.equal(get2.value, 101);
 
@@ -76,7 +74,6 @@ describe('RefCountedCache', function () {
     // calls create()
     const get1 = cache.get('key1', {
       timeout: 100,
-      args: { foo: 'bar' },
     });
 
     assert.equal(i, 1);
@@ -102,7 +99,7 @@ describe('RefCountedCache', function () {
     });
 
     // calls create()
-    const get1 = cache.get('key1', { timeout: 200, args: { foo: 'bar' } });
+    const get1 = cache.get('key1', { timeout: 200 });
     assert.equal(i, 1);
     assert.equal(get1.value, 1);
 
@@ -183,5 +180,19 @@ describe('RefCountedCache', function () {
     // no more refs, now deleted
     assert.equal(i, 1);
     assert.equal(get3.value, 1);
+  });
+
+  it('options.args[]', function (cb) {
+    const cache = new RefCountedCache({
+      create: (key, arg0, arg1) => {
+        assert.deepStrictEqual(arg0, { foo: 'bar' });
+        assert.deepStrictEqual(arg1, 123);
+        cb(null);
+      },
+      clean: () => {},
+      defaultTimeout: 1 * 1000,
+    });
+
+    cache.get('key1', {}, { foo: 'bar' }, 123);
   });
 });

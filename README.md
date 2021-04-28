@@ -42,13 +42,13 @@ const cache = new RefCountedCache({
 const cacheKey = 'key1'
 
 // calls create()
-const get1 = cache.get(cacheKey, { args: ['my text 1'] });
+const get1 = cache.get(cacheKey, {}, 'my text 1');
 
 // 'hello world: my text 1'
 console.info(get1.value.text);
 
 // returns cached value from first get()
-const get2 = cache.get(cacheKey, { args: ['my text 2'] });
+const get2 = cache.get(cacheKey, {}, 'my text 2');
 
 // true
 console.info(get1.value.text === get2.value.text);
@@ -88,7 +88,7 @@ const cache = new RefCountedCache({
 const cacheKey = 'key1'
 
 // calls create()
-const get1 = cache.get(cacheKey, { args: ['my text 1'] });
+const get1 = cache.get(cacheKey, {}, 'my text 1');
 
 // calls clean() instantly
 get1.clean();

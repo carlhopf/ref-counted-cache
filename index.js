@@ -9,13 +9,13 @@ export default class RefCountedCache {
     this.cache = {};
   }
 
-  get(key, { args = [], timeout } = {}) {
+  get(key, { timeout } = {}, ...args) {
     let cached = this.cache[key];
 
     // create
     if (!cached) {
       cached = {
-        value: this.create(key, args),
+        value: this.create(key, ...args),
         refs: [],
         cleanTimeout: undefined,
         timeoutMs: timeout || this.defaultTimeout,
